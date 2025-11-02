@@ -1,0 +1,680 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NodeBot Editor</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  /* Minimal editor styling */
+  :root {
+    --bg: #0f1724;
+    --panel: #0b1220;
+    --muted: #98a0b3;
+    --accent: #5865F2;
+    --node: #101827;
+    --danger: #d9534f;
+  }
+  body { margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: linear-gradient(180deg,#071019 0%, #07111a 100%); color:#e6eef8; height:100vh; }
+  header { display:flex; align-items:center; gap:12px; padding:10px 12px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.03); }
+  header .btn{ background:var(--panel); border:none; padding:6px 10px; color:var(--muted); border-radius:8px; cursor:pointer;}
+  .editor-shell{ display:flex; height:calc(100vh - 56px); gap:12px; padding:12px; box-sizing:border-box; }
+  .sidebar { width:220px; background:rgba(255,255,255,0.02); border-radius:8px; padding:12px; box-sizing:border-box; overflow:auto; }
+  .sidebar h3{ margin:0 0 8px 0; font-size:13px; color:var(--muted); }
+  .node-card { background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:8px 10px; margin-bottom:8px; border-radius:8px; cursor:grab; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .node-card .tag{ font-size:11px; opacity:.85; color:var(--muted); }
+  .canvas-wrap{ flex:1; position:relative; display:flex; flex-direction:column; gap:10px; }
+  .toolbar{ display:flex; gap:8px; align-items:center; }
+  .canvas{ flex:1; background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005)); border-radius:8px; position:relative; overflow:auto; border:1px solid rgba(255,255,255,0.03); }
+  .node { position:absolute; width:220px; min-height:42px; background:var(--node); border-radius:10px; box-shadow:0 8px 18px rgba(2,6,23,0.6); padding:10px; color:#e6eef8; cursor:grab; user-select:none; }
+  .node .title{ font-weight:700; font-size:13px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .node .body{ font-size:13px; color:var(--muted); }
+  .port{ width:12px; height:12px; border-radius:50%; background:#223; border:2px solid #3a3a3a; display:inline-block; vertical-align:middle; cursor:pointer; }
+  .port.out{ float:right; background:#234; }
+  .port.in{ float:left; background:#234; }
+  svg.connections{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+  .controls{ display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .small{ padding:6px 8px; font-size:13px; border-radius:8px; background:var(--panel); color:var(--muted); border:none; cursor:pointer;}
+  .danger{ background:var(--danger); color:#fff; }
+  .code-area{ height:260px; width:100%; border-radius:8px; resize:none; padding:8px; box-sizing:border-box; font-family:monospace; background:#06101a; color:#cfe9ff; border:1px solid rgba(255,255,255,0.03); }
+  .footer { display:flex; gap:8px; justify-content:space-between; align-items:center; padding-top:8px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .node .inputs, .node .outputs { display:flex; gap:6px; margin-top:8px; }
+  .node small{ color:var(--muted); }
+  .selected { outline: 2px solid rgba(88,101,242,0.25); box-shadow:0 12px 30px rgba(88,101,242,0.06); }
+  @media (max-width:900px){ .sidebar{ display:none; } .node{ width:180px } }
+</style>
+</head>
+<body>
+<header>
+  <a href="/dashboard.html" class="btn">← Back</a>
+  <div style="flex:1"><strong>NodeBot — Custom Node Editor</strong></div>
+  <div class="muted">Drag nodes, connect, save → generates JS</div>
+</header>
+
+<div class="editor-shell">
+  <aside class="sidebar">
+    <h3>Events</h3>
+    <div class="node-card" data-type="event_message">Message Create <span class="tag">event</span></div>
+    <div class="node-card" data-type="event_ready">Bot Ready <span class="tag">event</span></div>
+
+    <h3>Commands</h3>
+    <div class="node-card" data-type="cmd_simple">Command (simple) <span class="tag">/ping</span></div>
+    <div class="node-card" data-type="cmd_prefix">Command (prefix check) <span class="tag">/8ball</span></div>
+
+    <h3>Logic</h3>
+    <div class="node-card" data-type="if_starts">If starts with <span class="tag">condition</span></div>
+    <div class="node-card" data-type="random_choice">Random Choice <span class="tag">util</span></div>
+
+    <h3>Actions</h3>
+    <div class="node-card" data-type="reply">Reply <span class="tag">send</span></div>
+    <div class="node-card" data-type="custom_js">Custom JS <span class="tag">advanced</span></div>
+
+    <div style="height:20px;"></div>
+    <button id="clearBtn" class="small">Clear Canvas</button>
+  </aside>
+
+  <div class="canvas-wrap">
+    <div class="toolbar">
+      <button id="saveFlow" class="small">💾 Save Flow</button>
+      <button id="saveCode" class="small">💾 Save Generated Code</button>
+      <button id="runBtn" class="small">▶ Run</button>
+      <button id="stopBtn" class="small danger">■ Stop</button>
+      <button id="toggleCode" class="small">Code View</button>
+      <div style="flex:1"></div>
+      <div class="muted">Bot ID: <span id="botIdLabel">-</span></div>
+    </div>
+
+    <div id="canvas" class="canvas">
+      <svg class="connections"></svg>
+    </div>
+
+    <div class="footer">
+      <div class="muted">Nodes: <span id="nodeCount">0</span></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="exportBtn" class="small">Export JSON</button>
+        <button id="importBtn" class="small">Import JSON</button>
+        <input id="importFile" type="file" accept=".json" style="display:none" />
+      </div>
+    </div>
+
+    <textarea id="codeArea" class="code-area" style="display:none;"></textarea>
+  </div>
+</div>
+
+<script>
+/*
+  Custom Node Editor (no libraries)
+  - Lightweight node + connection implementation
+  - Simple code generation for basic nodes
+  - Save/load to your API using existing endpoints
+*/
+
+const canvas = document.getElementById('canvas');
+const svg = canvas.querySelector('svg.connections');
+const saveFlowBtn = document.getElementById('saveFlow');
+const saveCodeBtn = document.getElementById('saveCode');
+const runBtn = document.getElementById('runBtn');
+const stopBtn = document.getElementById('stopBtn');
+const toggleCodeBtn = document.getElementById('toggleCode');
+const codeArea = document.getElementById('codeArea');
+const nodeCountLabel = document.getElementById('nodeCount');
+const botIdLabel = document.getElementById('botIdLabel');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+
+let nodes = {};         // id -> node object
+let conns = [];         // {id, from:{node,portIndex}, to:{node,portIndex}}
+let selected = null;
+let dragOffset = null;
+let connecting = null;  // {fromNode,fromPort,svgLine}
+let nodeIdCounter = 1;
+
+const botId = location.hash.replace('#','') || (new URLSearchParams(location.search).get('bot') || '');
+const user_id = localStorage.getItem('user_id') || '';
+if (!user_id) {
+  alert('Please sign in first (go to dashboard).');
+  // redirect to login
+  location.href = '/login.html';
+}
+botIdLabel.innerText = botId || '-';
+
+function createNode(type, x=60, y=60, initData={}) {
+  const id = 'n' + (nodeIdCounter++);
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.dataset.id = id;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+
+  // Basic node template per type
+  const template = {
+    event_message: { title: 'Message Create', inputs:0, outputs:1, data:{} },
+    event_ready: { title: 'Bot Ready', inputs:0, outputs:1, data:{} },
+    cmd_simple: { title: 'Command (equal)', inputs:1, outputs:1, data:{command:'/ping'} },
+    cmd_prefix: { title: 'Command (prefix)', inputs:1, outputs:1, data:{prefix:'/8ball'} },
+    if_starts: { title: 'If starts with', inputs:1, outputs:2, data:{prefix:'/'} },
+    random_choice: { title: 'Random Choice', inputs:1, outputs:1, data:{choices:['Yes','No','Maybe']} },
+    reply: { title: 'Reply', inputs:1, outputs:0, data:{text:'Pong!'} },
+    custom_js: { title: 'Custom JS', inputs:1, outputs:1, data:{code:'// custom code\n'} }
+  }[type];
+
+  const meta = Object.assign({}, template || {title:type, inputs:1, outputs:1, data:{}});
+  meta.data = Object.assign({}, meta.data, initData);
+
+  el.innerHTML = `
+    <div class="title">
+      <span class="ttext">${meta.title}</span>
+      <span class="node-actions"><button class="small" data-action="edit">✎</button> <button class="small" data-action="del">✕</button></span>
+    </div>
+    <div class="body">
+      <div class="body-content"></div>
+      <div class="inputs"></div>
+      <div class="outputs"></div>
+    </div>
+  `;
+
+  // render controls depending on type
+  const bodyContent = el.querySelector('.body-content');
+  if (type === 'cmd_simple' || type === 'cmd_prefix' || type === 'if_starts') {
+    const input = document.createElement('input');
+    input.value = meta.data.command || meta.data.prefix || '';
+    input.placeholder = 'Command or prefix';
+    input.style.width = '100%';
+    input.oninput = (e) => { meta.data.command = e.target.value; meta.data.prefix = e.target.value; };
+    bodyContent.appendChild(input);
+  } else if (type === 'reply') {
+    const t = document.createElement('input');
+    t.value = meta.data.text;
+    t.placeholder = 'Reply text';
+    t.style.width = '100%';
+    t.oninput = (e) => meta.data.text = e.target.value;
+    bodyContent.appendChild(t);
+  } else if (type === 'random_choice') {
+    const ta = document.createElement('input');
+    ta.value = meta.data.choices.join(',');
+    ta.placeholder = 'Choices comma separated';
+    ta.style.width = '100%';
+    ta.oninput = (e) => meta.data.choices = e.target.value.split(',').map(s=>s.trim()).filter(Boolean);
+    bodyContent.appendChild(ta);
+  } else if (type === 'custom_js') {
+    const ta = document.createElement('textarea');
+    ta.value = meta.data.code;
+    ta.style.width='100%';
+    ta.style.height='70px';
+    ta.oninput = (e) => meta.data.code = e.target.value;
+    bodyContent.appendChild(ta);
+  } else {
+    bodyContent.innerHTML = '<small class="muted">Connect outputs to actions.</small>';
+  }
+
+  // inputs / outputs
+  const inputsDiv = el.querySelector('.inputs');
+  const outputsDiv = el.querySelector('.outputs');
+  for (let i=0;i<meta.inputs;i++){
+    const p = document.createElement('div');
+    p.className='port in';
+    p.dataset.port = i;
+    p.title = 'input';
+    inputsDiv.appendChild(p);
+    p.addEventListener('click', e => onPortClick(e, id, 'in', i));
+  }
+  for (let i=0;i<meta.outputs;i++){
+    const p = document.createElement('div');
+    p.className='port out';
+    p.dataset.port = i;
+    p.title = 'output';
+    outputsDiv.appendChild(p);
+    p.addEventListener('click', e => onPortClick(e, id, 'out', i));
+  }
+
+  canvas.appendChild(el);
+
+  // events
+  el.addEventListener('mousedown', (e) => startDrag(e, el, id));
+  el.querySelectorAll('[data-action="del"]').forEach(b=>b.onclick = (ev)=>{ ev.stopPropagation(); removeNode(id); });
+  el.querySelectorAll('[data-action="edit"]').forEach(b=>b.onclick = (ev)=>{ ev.stopPropagation(); openNodeEditor(id); });
+
+  nodes[id] = { id, type, x, y, el, meta };
+  updateNodeCount();
+  redrawConnections();
+  return id;
+}
+
+function startDrag(e, el, id){
+  if (e.target.classList.contains('port') || e.target.dataset.action) return;
+  selected = id;
+  dragOffset = { x: e.clientX - el.offsetLeft, y: e.clientY - el.offsetTop };
+  el.classList.add('selected');
+  window.addEventListener('mousemove', onDrag);
+  window.addEventListener('mouseup', stopDrag);
+}
+function onDrag(e){
+  if (!selected) return;
+  const n = nodes[selected];
+  n.x = Math.max(6, e.clientX - dragOffset.x);
+  n.y = Math.max(6, e.clientY - dragOffset.y);
+  n.el.style.left = n.x + 'px';
+  n.el.style.top = n.y + 'px';
+  redrawConnections();
+}
+function stopDrag(){
+  if (selected) nodes[selected].el.classList.remove('selected');
+  selected = null;
+  dragOffset = null;
+  window.removeEventListener('mousemove', onDrag);
+  window.removeEventListener('mouseup', stopDrag);
+}
+
+function removeNode(id){
+  // remove connections
+  conns = conns.filter(c => c.from.node !== id && c.to.node !== id);
+  // remove element
+  if (nodes[id]) {
+    nodes[id].el.remove();
+    delete nodes[id];
+  }
+  redrawConnections();
+  updateNodeCount();
+}
+
+function onPortClick(e, nodeId, direction, portIndex){
+  e.stopPropagation();
+  if (direction === 'out') {
+    // start connecting
+    const from = { node: nodeId, portIndex };
+    if (connecting) cleanupTempLine();
+    connecting = { from, line: createSVGLine() };
+    // position line
+    updateTempLine();
+    window.addEventListener('mousemove', updateTempLine);
+    window.addEventListener('mouseup', finishTempLine);
+  } else {
+    // attempt to complete connection if there is a connecting.out
+    if (connecting && connecting.from) {
+      const to = { node: nodeId, portIndex };
+      // prevent self-loop on same port
+      if (connecting.from.node === to.node) { cleanupTempLine(); return; }
+      const id = 'c'+(Math.random().toString(36).slice(2,9));
+      conns.push({ id, from: connecting.from, to });
+      cleanupTempLine();
+      redrawConnections();
+    }
+  }
+}
+
+function createSVGLine(){
+  const l = document.createElementNS('http://www.w3.org/2000/svg','path');
+  l.setAttribute('stroke','#66b0ff');
+  l.setAttribute('stroke-width','2');
+  l.setAttribute('fill','none');
+  svg.appendChild(l);
+  return l;
+}
+
+function updateTempLine(e){
+  if (!connecting) return;
+  const fromNode = nodes[connecting.from.node];
+  if (!fromNode) return;
+  const outEl = fromNode.el.querySelector('.outputs .port[data-port="'+connecting.from.portIndex+'"]');
+  const start = getPortCenter(outEl);
+  const mouse = { x: (event.clientX - canvas.getBoundingClientRect().left), y: (event.clientY - canvas.getBoundingClientRect().top) };
+  const p1 = start;
+  const p2 = mouse;
+  const d = `M ${p1.x} ${p1.y} C ${p1.x+80} ${p1.y} ${p2.x-80} ${p2.y} ${p2.x} ${p2.y}`;
+  connecting.line.setAttribute('d', d);
+}
+
+function finishTempLine(e){
+  window.removeEventListener('mousemove', updateTempLine);
+  window.removeEventListener('mouseup', finishTempLine);
+  // if mouse up on a port, onPortClick(in) already handles completion
+  cleanupTempLine();
+}
+
+function cleanupTempLine(){
+  if (!connecting) return;
+  if (connecting.line && connecting.line.parentNode) connecting.line.parentNode.removeChild(connecting.line);
+  connecting = null;
+}
+
+function getPortCenter(portEl){
+  const canvasRect = canvas.getBoundingClientRect();
+  const rect = portEl.getBoundingClientRect();
+  return { x: rect.left + rect.width/2 - canvasRect.left + canvas.scrollLeft, y: rect.top + rect.height/2 - canvasRect.top + canvas.scrollTop };
+}
+
+function redrawConnections(){
+  // clear svg
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  // draw each connection
+  conns.forEach(c => {
+    const fromNode = nodes[c.from.node];
+    const toNode = nodes[c.to.node];
+    if (!fromNode || !toNode) return;
+    const outEl = fromNode.el.querySelector('.outputs .port[data-port="'+c.from.portIndex+'"]');
+    const inEl = toNode.el.querySelector('.inputs .port[data-port="'+c.to.portIndex+'"]');
+    if (!outEl || !inEl) return;
+    const p1 = getPortCenter(outEl);
+    const p2 = getPortCenter(inEl);
+    const path = createSVGLine();
+    const d = `M ${p1.x} ${p1.y} C ${p1.x+80} ${p1.y} ${p2.x-80} ${p2.y} ${p2.x} ${p2.y}`;
+    path.setAttribute('d', d);
+    path.dataset.conn = c.id;
+    // click to delete connection
+    path.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      conns = conns.filter(cc => cc.id !== c.id);
+      redrawConnections();
+    });
+  });
+}
+
+function updateNodeCount(){ nodeCountLabel.innerText = Object.keys(nodes).length; }
+
+/* Sidebar drag source */
+document.querySelectorAll('.node-card').forEach(card=>{
+  card.draggable = true;
+  card.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', card.dataset.type);
+  });
+});
+canvas.addEventListener('dragover', (e)=> e.preventDefault());
+canvas.addEventListener('drop', (e)=>{
+  e.preventDefault();
+  const type = e.dataTransfer.getData('text/plain');
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left + canvas.scrollLeft;
+  const y = e.clientY - rect.top + canvas.scrollTop;
+  createNode(type, x, y);
+});
+
+/* click on canvas to deselect */
+canvas.addEventListener('mousedown', (e)=> {
+  if (e.target === canvas || e.target === svg) {
+    // deselect
+    selected = null;
+    Object.values(nodes).forEach(n=>n.el.classList.remove('selected'));
+  }
+});
+
+/* Node editor (small modal inline) */
+function openNodeEditor(id){
+  const node = nodes[id];
+  if(!node) return;
+  const t = prompt('Edit JSON data for node (meta.data). Use valid JSON:', JSON.stringify(node.meta.data, null, 2));
+  if (t !== null) {
+    try {
+      node.meta.data = JSON.parse(t);
+    } catch(e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  }
+}
+
+/* Export / Import */
+document.getElementById('exportBtn').onclick = () => {
+  const payload = { nodes: serializeNodes(), conns, meta:{created: new Date().toISOString()} };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'flow.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+importBtn.onclick = () => importFile.click();
+importFile.onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const txt = await f.text();
+  try {
+    const obj = JSON.parse(txt);
+    loadFlow(obj);
+  } catch(err){ alert('Invalid JSON'); }
+}
+
+/* serialization */
+function serializeNodes(){
+  const out = [];
+  for (const id in nodes) {
+    const n = nodes[id];
+    out.push({
+      id, type: n.type, x: n.x, y: n.y, data: n.meta.data
+    })
+  }
+  return out;
+}
+function loadFlow(obj){
+  // clear existing
+  for (const id in nodes) removeNode(id);
+  conns = [];
+  if (!obj.nodes) return;
+  obj.nodes.forEach(n => {
+    createNode(n.type, n.x || 60, n.y || 60, n.data || {});
+  });
+  // rebuild conns with node ids mapping (if same ids)
+  if (obj.conns) {
+    conns = obj.conns.map(c => ({...c}));
+  }
+  redrawConnections();
+}
+
+/* Code generator: simple visitor that builds handlers */
+function generateCode(){
+  // find event nodes
+  const eventNodes = Object.values(nodes).filter(n=> n.type.startsWith('event_'));
+  let codeParts = [
+`// GENERATED by NodeBot
+const { Client, GatewayIntentBits } = require("discord.js");
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+client.once('ready', () => console.log('Bot ready: ' + client.user.tag));`
+  ];
+
+  function runFrom(node, visited=new Set()){
+    // prevent infinite loops
+    if (!node || visited.has(node.id)) return [];
+    visited.add(node.id);
+    const out = [];
+    // for each outgoing connection from this node
+    const outs = conns.filter(c => c.from.node === node.id);
+    for (const c of outs) {
+      const toNode = nodes[c.to.node];
+      if (!toNode) continue;
+      // handle node types
+      if (toNode.type === 'cmd_simple' || toNode.type === 'cmd_prefix') {
+        // convert to check inside messageCreate handler
+        // chain further from command node
+        const body = runFrom(toNode, new Set(visited));
+        const cond = toNode.meta.data.command || toNode.meta.data.prefix || '';
+        out.push({ type:'command', cond, body });
+      } else if (toNode.type === 'if_starts') {
+        const match = toNode.meta.data.prefix || '';
+        const inner = runFrom(toNode, new Set(visited));
+        out.push({ type:'if_starts', match, body: inner });
+      } else if (toNode.type === 'reply') {
+        out.push({ type:'reply', text: toNode.meta.data.text || '...' });
+      } else if (toNode.type === 'random_choice') {
+        out.push({ type:'random_choice', choices: toNode.meta.data.choices || ['Yes','No'] });
+      } else if (toNode.type === 'custom_js') {
+        out.push({ type:'custom_js', code: toNode.meta.data.code || '// empty' });
+      } else {
+        // generic: continue traversal
+        const inner = runFrom(toNode, new Set(visited));
+        out.push(...inner);
+      }
+    }
+    return out;
+  }
+
+  // Build messageCreate handler
+  const handlers = [];
+  eventNodes.forEach(ev => {
+    if (ev.type === 'event_message') {
+      // Walk graph from this event
+      const sequence = runFrom(ev, new Set());
+      // For simplicity we only generate a single messageCreate with checks
+      // sequence is an array of statements like command -> body
+      // We'll make a simple generator
+      const h = [];
+      h.push(`client.on('messageCreate', async (msg) => {`);
+      // ignore bots
+      h.push(`  if (msg.author?.bot) return;`);
+      // handle each command-type item
+      sequence.forEach(item => {
+        if (item.type === 'command') {
+          const cond = item.cond || '';
+          // exact match or prefix
+          const isPrefix = cond.endsWith(' ');
+          h.push(`  if (msg.content.startsWith(${JSON.stringify(cond)})) {`);
+          // generate body statements
+          // body currently is array of objects
+          const genBody = generateBody(item.body || []);
+          genBody.forEach(line=> h.push('    ' + line));
+          h.push('    return;');
+          h.push('  }');
+        } else {
+          // fallback: run generic body
+          const genBody = generateBody([item]);
+          genBody.forEach(line=> h.push('  ' + line));
+        }
+      });
+      h.push('});');
+      handlers.push(h.join('\n'));
+    }
+  });
+
+  // if no message event defined, still add ready handler
+  const body = codeParts.join('\n') + '\n\n' + handlers.join('\n\n') + `\n\nclient.login(process.env.TOKEN).catch(e => console.error('Login failed', e));`;
+  return body;
+
+  // sub generator
+  function generateBody(items){
+    const out = [];
+    for (const it of items) {
+      if (it.type === 'reply') {
+        out.push(`await msg.reply(${JSON.stringify(it.text)});`);
+      } else if (it.type === 'random_choice') {
+        const arr = JSON.stringify(it.choices || []);
+        out.push(`{ const arr = ${arr}; const pick = arr[Math.floor(Math.random()*arr.length)]; await msg.reply(pick); }`);
+      } else if (it.type === 'custom_js') {
+        out.push(`(async()=>{ ${it.code} })();`);
+      } else if (it.type === 'if_starts') {
+        out.push(`if (msg.content.startsWith(${JSON.stringify(it.match)})) {`);
+        const inner = generateBody(it.body || []);
+        inner.forEach(l=> out.push('  '+l));
+        out.push('}');
+      } else {
+        // nothing
+      }
+    }
+    return out;
+  }
+}
+
+/* Save flow -> send JSON to /api/file/:botId/main.flow.json */
+async function apiPostFile(fname, content){
+  try {
+    const res = await fetch(`/api/file/${botId}/${fname}`, {
+      method:'POST',
+      headers: {'content-type':'application/json'},
+      body: JSON.stringify({ user_id, code: content })
+    });
+    const j = await res.json();
+    return j;
+  } catch(e){
+    return { error: e.message || String(e) };
+  }
+}
+
+saveFlowBtn.onclick = async () => {
+  const payload = { nodes: serializeNodes(), conns, meta:{ saved_at: new Date().toISOString() } };
+  const r = await apiPostFile('main.flow.json', JSON.stringify(payload, null, 2));
+  if (r && !r.error) alert('Flow saved.');
+  else alert('Save failed: ' + JSON.stringify(r));
+};
+
+saveCodeBtn.onclick = async () => {
+  const code = generateCode();
+  const r = await apiPostFile('main.js', code);
+  if (r && !r.error) alert('Generated code saved as main.js');
+  else alert('Save failed: ' + JSON.stringify(r));
+};
+
+runBtn.onclick = async () => {
+  const res = await fetch(`/api/start/${botId}`, {
+    method:'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ user_id })
+  });
+  const j = await res.json();
+  if (j && !j.error) alert('Started');
+  else alert('Start failed: ' + JSON.stringify(j));
+};
+stopBtn.onclick = async () => {
+  const res = await fetch(`/api/stop/${botId}`, {
+    method:'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ user_id })
+  });
+  const j = await res.json();
+  if (j && !j.error) alert('Stopped');
+  else alert('Stop failed: ' + JSON.stringify(j));
+};
+
+toggleCodeBtn.onclick = async () => {
+  if (codeArea.style.display === 'none') {
+    // show generated code
+    codeArea.value = generateCode();
+    codeArea.style.display = 'block';
+    canvas.style.display = 'none';
+    toggleCodeBtn.innerText = 'Canvas View';
+  } else {
+    codeArea.style.display = 'none';
+    canvas.style.display = 'block';
+    toggleCodeBtn.innerText = 'Code View';
+  }
+};
+
+/* load existing flow and code if present */
+async function loadExisting(){
+  if (!botId) return;
+  // try flow
+  try {
+    const r = await fetch(`/api/file/${botId}/main.flow.json`);
+    const j = await r.json();
+    if (j && j.code) {
+      const obj = JSON.parse(j.code);
+      loadFlow(obj);
+    }
+  } catch(e){}
+  // try to fetch main.js to fill code area
+  try {
+    const r2 = await fetch(`/api/file/${botId}/main.js`);
+    const j2 = await r2.json();
+    if (j2 && j2.code) {
+      // keep it available when switching to code view
+      codeArea.value = j2.code;
+    }
+  } catch(e){}
+}
+loadExisting();
+
+/* Clear canvas */
+document.getElementById('clearBtn').onclick = () => {
+  if (!confirm('Clear all nodes and connections?')) return;
+  for (const id in nodes) removeNode(id);
+  conns = [];
+  redrawConnections();
+}
+
+/* simple click handler for deleting connections via canvas (also allowed on line click) */
+canvas.addEventListener('dblclick', (e) => {
+  // double click canvas clears temp
+  cleanupTempLine();
+});
+
+/* keyboard delete to remove selected node */
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selected) removeNode(selected);
+  }
+});
+</script>
+</body>
+</html>

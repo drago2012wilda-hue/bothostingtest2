@@ -1,0 +1,82 @@
+:root {
+  --bg: #1e1e2f;
+  --bg-dark: #141420;
+  --accent: #5865f2;
+  --text: #e4e4e9;
+  --text-muted: #aaa;
+  --card: #252537;
+  --radius: 20px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  background: var(--bg-dark);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  padding: 40px;
+}
+
+.card {
+  background: var(--card);
+  width: 100%;
+  max-width: 1000px;
+  border-radius: var(--radius);
+  padding: 50px 60px;
+  box-shadow: 0 0 35px rgba(0, 0, 0, 0.25);
+  line-height: 1.7;
+  animation: fadeIn 0.6s ease;
+}
+
+h1, h2 {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+h1 {
+  text-align: center;
+  font-size: 2.3rem;
+  margin-bottom: 10px;
+}
+
+h2 {
+  font-size: 1.3rem;
+  margin-top: 30px;
+}
+
+p, li {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+ul {
+  margin-left: 20px;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+footer {
+  margin-top: 50px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

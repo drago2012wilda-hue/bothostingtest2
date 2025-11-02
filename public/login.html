@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" type="image/png" href="/logo-placeholder.png">
+<title>Login</title>
+<title>BotHoster</title>
+<meta name="title" content="BotHoster — Free Discord Bot Hosting">
+<meta name="description" content="Host your Discord bots for free with BotHoster! Create, manage, and run your bots effortlessly. Premium plans offer 24/7 uptime and more.">
+<meta property="og:type" content="website">
+
+<meta property="og:url" content="https://dcbothoster.onrender.com/">
+<meta property="og:title" content="BotHoster — Free Discord Bot Hosting">
+<meta property="og:description" content="Host your Discord bots for free with BotHoster! Create, manage, and run your bots effortlessly.">
+<meta property="og:image" content="https://dcbothoster.onrender.com/banner.png">
+
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="https://dcbothoster.onrender.com/">
+<meta property="twitter:title" content="BotHoster — Free Discord Bot Hosting">
+<meta property="twitter:description" content="Host your Discord bots for free with BotHoster! Create, manage, and run your bots effortlessly.">
+<meta property="twitter:image" content="https://dcbothoster.onrender.com/banner.png">
+</head>
+<body>
+<div class="bg" style="background-image:url('/assets/bgimage.png')">
+  <div class="center">
+    <div class="card login-card">
+      <img src="/logo-placeholder.png" class="logo-large">
+      <h1>Sign in with Discord</h1>
+
+      <div class="g-recaptcha"
+           data-sitekey="6Lf0AecrAAAAAE1Ze7iucKhvdpUQmP_2kxsZoXoq"
+           data-callback="onCaptchaVerified">
+      </div>
+
+      <button id="discordLogin" class="btn big" disabled>Continue with Discord</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<script>
+const CLIENT_ID = '1426300645777870898';
+const REDIRECT = window.location.origin + '/dashboard.html';
+
+async function onCaptchaVerified(token) {
+  const res = await fetch('/api/verify-human', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token })
+  });
+  const data = await res.json();
+
+  if (data.error) return alert(data.error);
+  if (data.vpnBlocked) return alert('Access denied: VPNs or proxies are not allowed.');
+
+  document.getElementById('discordLogin').disabled = false;
+}
+
+document.getElementById('discordLogin').onclick = () => {
+  const url = 'https://discord.com/api/oauth2/authorize' +
+    '?client_id=' + CLIENT_ID +
+    '&redirect_uri=' + encodeURIComponent(REDIRECT) +
+    '&response_type=token' +
+    '&scope=identify%20email';
+  window.location = url;
+};
+</script>
+</body>
+</html>

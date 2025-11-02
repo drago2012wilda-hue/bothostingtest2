@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access Restricted - BotHoster</title>
+<link rel="icon" type="image/png" href="/logo-placeholder.png">
+<link rel="stylesheet" href="/styles.css">
+<style>
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+.card {
+  max-width: 480px;
+  text-align: center;
+  padding: 40px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.card h1 {
+  color: #ff4b4b;
+  margin-bottom: 12px;
+}
+.card p {
+  margin: 8px 0;
+  color: #ddd;
+}
+.btn {
+  background: linear-gradient(90deg, #06b6d4, #7c3aed);
+  padding: 12px 18px;
+  border-radius: 12px;
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 18px;
+}
+.btn:hover {
+  opacity: 0.85;
+  transform: scale(1.03);
+}
+</style>
+</head>
+<body>
+<div class="center">
+  <div class="card">
+    <h1>Access Restricted</h1>
+    <p id="user"></p>
+    <p id="reason"></p>
+    <p style="opacity:0.8;">If you believe this was a mistake, you can appeal via our Discord server.</p>
+    <button class="btn" onclick="window.open('https://discord.gg/CrgcwyYtYZ', '_blank')">Appeal on Discord</button>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const user = localStorage.getItem("banned_user") || "Your account";
+  const reason = localStorage.getItem("ban_reason") || "Your access has been restricted.";
+  document.getElementById("user").innerText = `${user}`;
+  document.getElementById("reason").innerText = `Reason: ${reason}`;
+});
+</script>
+</body>
+</html>
